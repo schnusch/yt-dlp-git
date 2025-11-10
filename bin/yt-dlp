@@ -1,0 +1,12 @@
+#!/bin/sh
+set -u
+prefix="${XDG_STATE_HOME:-"$HOME/.local/state"}/yt-dlp.git"
+
+PYTHONPATH="$prefix/lib/python3/site-packages${PYTHONPATH:+:}${PYTHONPATH-}" \
+python3 -m yt_dlp "$@"
+rc=$?
+if [ $rc -ne 0 ]; then
+    echo "yt-dlp.git: yt-dlp exited with $rc, starting update..." >&2
+    systemctl --user start yt-dlp-update.service
+fi
+exit $rc

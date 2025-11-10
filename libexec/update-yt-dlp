@@ -1,0 +1,48 @@
+#!/bin/sh
+PS4='$ '
+set -eux
+
+git_init() {
+    mkdir -p "$prefix"
+    temp=$(mktemp -dp "$prefix")
+    (
+        git init --bare --initial-branch=master "$temp/git"
+        git -C "$temp/git" remote add origin https://github.com/yt-dlp/yt-dlp.git
+        mv "$temp/git" "$prefix/git"
+    ) || rc=$?
+    rm -fr "$temp"
+    return ${rc:-0}
+}
+
+prefix="${1:-"${XDG_STATE_HOME:-"$HOME/.local/state"}/yt-dlp.git"}"
+
+[ -d "$prefix/git" ] \
+|| { echo "Initializing $prefix..." >&2; git_init; } \
+|| [ -d "$prefix/git" ]
+
+# fetch origin/master and save the new commit id
+echo "Fetching master..." >&2
+commit=$(git -C "$prefix/git" fetch --porcelain --depth=1 origin master)
+commit="${commit#? * }"
+commit="${commit%% *}"
+
+# create a new worktree for that commit
+echo "Creating first available worktree $prefix/worktree.%d..." >&2
+i=0
+while ! git -C "$prefix/git" worktree add --detach "../worktree.$i" "$commit"; do
+    : $((++i))
+done
+
+# symlink /opt/yt-dlp/lib/python3/site-packages/yt_dlp to ${worktree}/yt_dlp
+echo "Symlinking new worktree $prefix/worktree.$i..." >&2
+mkdir -p "$prefix/lib/python3/site-packages"
+old_worktree=$(readlink "$prefix/lib/python3/site-packages/yt_dlp") || old_worktree=""
+ln -fsT "../../../worktree.$i/yt_dlp" "$prefix/lib/python3/site-packages/yt_dlp"
+
+# remove old worktree
+old_worktree="${old_worktree#../../}"
+old_worktree="${old_worktree%/yt_dlp}"
+if [ -n "$old_worktree" ]; then
+    echo "Removing old worktree $old_worktree..." >&2
+    git -C "$prefix/git" worktree remove -f "$old_worktree"
+fi

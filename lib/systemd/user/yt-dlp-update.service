@@ -1,0 +1,7 @@
+[Unit]
+Description=Update %S/yt-dlp.git
+
+[Service]
+ExecStart=/usr/local/libexec/update-yt-dlp %S/yt-dlp.git
+Restart=on-failure
+Type=oneshot
